@@ -177,4 +177,101 @@ class Facebook
 
 		return $this;
 	}
+
+	/**
+	 * @return User
+	 */
+	public function user()
+	{
+		return $this->__get('user');
+	}
+
+	/**
+	 * @return Status
+	 */
+	public function status()
+	{
+		return $this->__get('status');
+	}
+
+	/**
+	 * @return Checkin
+	 */
+	public function checkin()
+	{
+		return $this->__get('checkin');
+	}
+
+	/**
+	 * @return Event
+	 */
+	public function event()
+	{
+		return $this->__get('event');
+	}
+
+	/**
+	 * @return Group
+	 */
+	public function group()
+	{
+		return $this->__get('group');
+	}
+
+	/**
+	 * @return Link
+	 */
+	public function link()
+	{
+		return $this->__get('link');
+	}
+
+	/**
+	 * @return Note
+	 */
+	public function note()
+	{
+		return $this->__get('note');
+	}
+
+	/**
+	 * @return Post
+	 */
+	public function post()
+	{
+		return $this->__get('post');
+	}
+
+	/**
+	 * @return Comment
+	 */
+	public function comment()
+	{
+		return $this->__get('comment');
+	}
+
+	/**
+	 * @return Photo
+	 */
+	public function photo()
+	{
+		return $this->__get('photo');
+	}
+
+	/**
+	 * @return Video
+	 */
+	public function video()
+	{
+		return $this->__get('video');
+	}
+
+	/**
+	 * @return Album
+	 */
+	public function album()
+	{
+		return $this->__get('album');
+	}
+
 }
