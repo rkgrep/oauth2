@@ -8,10 +8,9 @@
 
 namespace Joomla\OAuth2;
 
-use Joomla\Application\AbstractWebApplication;
-use Joomla\Http\HttpFactory;
-use Joomla\Input\Input;
-use Joomla\Http\Http;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\Exception\ClientException;
 
 /**
  * Joomla Framework class for interacting with an OAuth 2.0 server.
@@ -31,38 +30,20 @@ class Client
 	/**
 	 * The HTTP client object to use in sending HTTP requests.
 	 *
-	 * @var    Http
+	 * @var    ClientInterface
 	 * @since  1.0
 	 */
 	protected $http;
 
 	/**
-	 * The input object to use in retrieving GET/POST data.
-	 *
-	 * @var    Input
-	 * @since  1.0
-	 */
-	protected $input;
-
-	/**
-	 * The application object to send HTTP headers for redirects.
-	 *
-	 * @var    AbstractWebApplication
-	 * @since  1.0
-	 */
-	protected $application;
-
-	/**
 	 * Constructor.
 	 *
-	 * @param   array|\ArrayAccess      $options      OAuth2 Client options object
-	 * @param   Http                    $http         The HTTP client object
-	 * @param   Input                   $input        The input object
-	 * @param   AbstractWebApplication  $application  The application object
+	 * @param   array|\ArrayAccess  $options      OAuth2 Client options object
+	 * @param   ClientInterface     $http         The HTTP client object
 	 *
 	 * @since   1.0
 	 */
-	public function __construct($options = array(), Http $http = null, Input $input = null, AbstractWebApplication $application = null)
+	public function __construct($options = array(), ClientInterface $http = null)
 	{
 		if (!is_array($options) && !($options instanceof \ArrayAccess))
 		{
@@ -72,60 +53,24 @@ class Client
 		}
 
 		$this->options = $options;
-		$this->http = $http instanceof Http ? $http : HttpFactory::getHttp($this->options);
-		$this->input = $input instanceof Input ? $input : ($application instanceof AbstractWebApplication ? $application->input : new Input);
-		$this->application = $application;
+		$this->http = $http instanceof ClientInterface ? $http : new GuzzleClient();
 	}
 
 	/**
 	 * Get the access token or redirect to the authentication URL.
 	 *
+	 * @param   string  $code
 	 * @return  string  The access token
 	 *
 	 * @since   1.0
 	 * @throws  \RuntimeException
 	 */
-	public function authenticate()
+	public function authenticate($code)
 	{
-		if ($data['code'] = $this->input->get('code', false, 'raw'))
-		{
-			$data['grant_type'] = 'authorization_code';
-			$data['redirect_uri'] = $this->getOption('redirecturi');
-			$data['client_id'] = $this->getOption('clientid');
-			$data['client_secret'] = $this->getOption('clientsecret');
-			$response = $this->http->post($this->getOption('tokenurl'), $data);
-
-			if (!($response->code >= 200 && $response->code < 400))
-			{
-				throw new \RuntimeException('Error code ' . $response->code . ' received requesting access token: ' . $response->body . '.');
-			}
-
-			if (strpos($response->headers['Content-Type'], 'application/json') !== false)
-			{
-				$token = array_merge(json_decode($response->body, true), array('created' => time()));
-			}
-			else
-			{
-				parse_str($response->body, $token);
-				$token = array_merge($token, array('created' => time()));
-			}
-
-			$this->setToken($token);
-
-			return $token;
-		}
-
-		if ($this->getOption('sendheaders'))
-		{
-			if (!($this->application instanceof AbstractWebApplication))
-			{
-				throw new \RuntimeException('AbstractWebApplication object required for authentication process.');
-			}
-
-			$this->application->redirect($this->createUrl());
-		}
-
-		return false;
+		$data['code'] = $code;
+		$data['grant_type'] = 'authorization_code';
+		$data['redirect_uri'] = $this->getOption('redirect_uri');
+		return $this->getTokenViaHttp($data);
 	}
 
 	/**
@@ -162,19 +107,19 @@ class Client
 	 */
 	public function createUrl()
 	{
-		if (!$this->getOption('authurl') || !$this->getOption('clientid'))
+		if (!$this->getOption('auth_url') || !$this->getOption('client_id'))
 		{
 			throw new \InvalidArgumentException('Authorization URL and client_id are required');
 		}
 
-		$url = $this->getOption('authurl');
+		$url = $this->getOption('auth_url');
 		$url .= (strpos($url, '?') !== false) ? '&' : '?';
 		$url .= 'response_type=code';
-		$url .= '&client_id=' . urlencode($this->getOption('clientid'));
+		$url .= '&client_id=' . urlencode($this->getOption('client_id'));
 
-		if ($this->getOption('redirecturi'))
+		if ($this->getOption('redirect_uri'))
 		{
-			$url .= '&redirect_uri=' . urlencode($this->getOption('redirecturi'));
+			$url .= '&redirect_uri=' . urlencode($this->getOption('redirect_uri'));
 		}
 
 		if ($this->getOption('scope'))
@@ -188,9 +133,9 @@ class Client
 			$url .= '&state=' . urlencode($this->getOption('state'));
 		}
 
-		if (is_array($this->getOption('requestparams')))
+		if (is_array($this->getOption('request_params')))
 		{
-			foreach ($this->getOption('requestparams') as $key => $value)
+			foreach ($this->getOption('request_params') as $key => $value)
 			{
 				$url .= '&' . $key . '=' . urlencode($value);
 			}
@@ -208,7 +153,7 @@ class Client
 	 * @param   string   $method   The method with which to send the request
 	 * @param   integer  $timeout  The timeout for the request
 	 *
-	 * @return  \Joomla\Http\Response
+	 * @return  \Psr\Http\Message\ResponseInterface
 	 *
 	 * @since   1.0
 	 * @throws  \InvalidArgumentException
@@ -220,7 +165,7 @@ class Client
 
 		if (array_key_exists('expires_in', $token) && $token['created'] + $token['expires_in'] < time() + 20)
 		{
-			if (!$this->getOption('userefresh'))
+			if (!$this->getOption('use_refresh'))
 			{
 				return false;
 			}
@@ -228,11 +173,11 @@ class Client
 			$token = $this->refreshToken($token['refresh_token']);
 		}
 
-		if (!$this->getOption('authmethod') || $this->getOption('authmethod') == 'bearer')
+		if (!$this->getOption('auth_method') || $this->getOption('auth_method') == 'bearer')
 		{
 			$headers['Authorization'] = 'Bearer ' . $token['access_token'];
 		}
-		elseif ($this->getOption('authmethod') == 'get')
+		elseif ($this->getOption('auth_method') == 'get')
 		{
 			if (strpos($url, '?'))
 			{
@@ -243,32 +188,45 @@ class Client
 				$url .= '?';
 			}
 
-			$url .= $this->getOption('getparam') ? $this->getOption('getparam') : 'access_token';
+			$url .= $this->getOption('get_param') ? $this->getOption('get_param') : 'access_token';
 			$url .= '=' . $token['access_token'];
 		}
 
-		switch ($method)
-		{
-			case 'head':
-			case 'get':
-			case 'delete':
-			case 'trace':
-				$response = $this->http->$method($url, $headers, $timeout);
-				break;
-
-			case 'post':
-			case 'put':
-			case 'patch':
-				$response = $this->http->$method($url, $data, $headers, $timeout);
-				break;
-
-			default:
-				throw new \InvalidArgumentException('Unknown HTTP request method: ' . $method . '.');
+		if (! array_key_exists('Accept', $headers)) {
+			$headers['Accept'] = 'application/json';
 		}
 
-		if ($response->code < 200 || $response->code >= 400)
-		{
-			throw new \RuntimeException('Error code ' . $response->code . ' received requesting data: ' . $response->body . '.');
+		try {
+			switch ($method) {
+				case 'head':
+				case 'get':
+				case 'delete':
+				case 'trace':
+					$response = $this->http->request($method, $url, [
+						'headers' => $headers,
+						'timeout' => $timeout,
+					]);
+					break;
+
+				case 'post':
+				case 'put':
+				case 'patch':
+					$postKey = (version_compare(ClientInterface::VERSION, '6') === 1) ? 'form_params' : 'body';
+					$response = $this->http->request($method, $url, [
+						'headers' => $headers,
+						'timeout' => $timeout,
+						$postKey => $data,
+					]);
+					break;
+
+				default:
+					throw new \InvalidArgumentException('Unknown HTTP request method: ' . $method . '.');
+			}
+
+		} catch (ClientException $e) {
+			$code = $e->getResponse()->getStatusCode();
+			$body = $e->getResponse()->getBody()->getContents();
+			throw new \RuntimeException('Error code ' . $code . ' received requesting data: ' . $body . '.');
 		}
 
 		return $response;
@@ -315,7 +273,7 @@ class Client
 	 */
 	public function getToken()
 	{
-		return $this->getOption('accesstoken');
+		return $this->getOption('access_token');
 	}
 
 	/**
@@ -335,7 +293,7 @@ class Client
 			unset($value['expires']);
 		}
 
-		$this->setOption('accesstoken', $value);
+		$this->setOption('access_token', $value);
 
 		return $this;
 	}
@@ -353,7 +311,7 @@ class Client
 	 */
 	public function refreshToken($token = null)
 	{
-		if (!$this->getOption('userefresh'))
+		if (!$this->getOption('use_refresh'))
 		{
 			throw new \RuntimeException('Refresh token is not supported for this OAuth instance.');
 		}
@@ -372,22 +330,41 @@ class Client
 
 		$data['grant_type'] = 'refresh_token';
 		$data['refresh_token'] = $token;
-		$data['client_id'] = $this->getOption('clientid');
-		$data['client_secret'] = $this->getOption('clientsecret');
-		$response = $this->http->post($this->getOption('tokenurl'), $data);
+		return $this->getTokenViaHttp($data);
+	}
 
-		if (!($response->code >= 200 || $response->code < 400))
+	/**
+	 * @param  array $data
+	 * @return string
+	 */
+	protected function getTokenViaHttp(array $data)
+	{
+		$data['client_id'] = $this->getOption('client_id');
+		$data['client_secret'] = $this->getOption('client_secret');
+
+		try
 		{
-			throw new \Exception('Error code ' . $response->code . ' received refreshing token: ' . $response->body . '.');
+			$postKey = (version_compare(ClientInterface::VERSION, '6') === 1) ? 'form_params' : 'body';
+			$response = $this->http->request('POST', $this->getOption('token_url'), [
+				'headers' => ['Accept' => 'application/json'],
+				$postKey => $data,
+			]);
+		} catch (ClientException $e)
+		{
+			$code = $e->getResponse()->getStatusCode();
+			$body = $e->getResponse()->getBody()->getContents();
+			throw new \RuntimeException('Error code ' . $code . ' received requesting access token: ' . $body . '.');
 		}
 
-		if (strpos($response->headers['Content-Type'], 'application/json') !== false)
+		$body = $response->getBody()->getContents();
+
+		if (in_array('application/json', $response->getHeader('Content-Type')))
 		{
-			$token = array_merge(json_decode($response->body, true), array('created' => time()));
+			$token = array_merge(json_decode($body, true), array('created' => time()));
 		}
 		else
 		{
-			parse_str($response->body, $token);
+			parse_str($body, $token);
 			$token = array_merge($token, array('created' => time()));
 		}
 
