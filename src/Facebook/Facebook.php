@@ -179,6 +179,14 @@ class Facebook
 	}
 
 	/**
+	 * @return OAuth
+	 */
+	public function getOAuth()
+	{
+		return $this->oauth;
+	}
+
+	/**
 	 * @return User
 	 */
 	public function user()
