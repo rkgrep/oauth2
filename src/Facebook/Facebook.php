@@ -16,12 +16,6 @@ namespace Joomla\OAuth2\Facebook;
 class Facebook
 {
 	/**
-	 * @var    array  Options for the Facebook object.
-	 * @since  1.0
-	 */
-	protected $options;
-
-	/**
 	 * @var    \Joomla\OAuth2\Facebook\OAuth  The OAuth client.
 	 * @since  1.0
 	 */
@@ -107,14 +101,12 @@ class Facebook
 	 *
 	 * @since   1.0
 	 */
-	public function __construct(OAuth $oauth = null, $options = array())
+	public function __construct($options = array(), OAuth $oauth = null)
 	{
-		$this->options = $options;
-
 		// Setup the default API url if not already set.
-		if (!isset($this->options['api.url']))
+		if (!isset($options['api.url']))
 		{
-			$this->options['api.url'] = 'https://graph.facebook.com/';
+			$options['api.url'] = 'https://graph.facebook.com/';
 		}
 
 		$this->oauth = $oauth ?: new OAuth($options);
@@ -158,7 +150,7 @@ class Facebook
 	 */
 	public function getOption($key)
 	{
-		return isset($this->options[$key]) ? $this->options[$key] : null;
+		return $this->oauth->getOption($key);
 	}
 
 	/**
@@ -173,8 +165,7 @@ class Facebook
 	 */
 	public function setOption($key, $value)
 	{
-		$this->options[$key] = $value;
-
+		$this->oauth->setOption($key, $value);
 		return $this;
 	}
 

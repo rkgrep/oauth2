@@ -53,7 +53,9 @@ class Client
 		}
 
 		$this->options = $options;
-		$this->http = $http instanceof ClientInterface ? $http : new GuzzleClient();
+		$this->http = $http instanceof ClientInterface
+			? $http
+			: new GuzzleClient(['base_uri' => isset($options['api.url']) ? $options['api.url'] : null]);
 	}
 
 	/**
