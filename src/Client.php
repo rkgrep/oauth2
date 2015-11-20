@@ -358,7 +358,7 @@ class Client
 
 		$body = $response->getBody()->getContents();
 
-		if (in_array('application/json', $response->getHeader('Content-Type')))
+		if (strpos($response->getHeaderLine('Content-Type'), 'application/json') !== false)
 		{
 			$token = array_merge(json_decode($body, true), array('created' => time()));
 		}
