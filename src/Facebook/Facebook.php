@@ -8,8 +8,6 @@
 
 namespace Joomla\OAuth2\Facebook;
 
-use Joomla\Http\Http;
-
 /**
  * Joomla Framework class for interacting with a Facebook API instance.
  *
@@ -22,12 +20,6 @@ class Facebook
 	 * @since  1.0
 	 */
 	protected $options;
-
-	/**
-	 * @var    \Joomla\Http\Http  The HTTP client object to use in sending HTTP requests.
-	 * @since  1.0
-	 */
-	protected $client;
 
 	/**
 	 * @var    \Joomla\OAuth2\Facebook\OAuth  The OAuth client.
@@ -112,21 +104,20 @@ class Facebook
 	 *
 	 * @param   OAuth  $oauth    OAuth client.
 	 * @param   array  $options  Facebook options array.
-	 * @param   Http   $client   The HTTP client object.
 	 *
 	 * @since   1.0
 	 */
-	public function __construct(OAuth $oauth = null, $options = array(), Http $client = null)
+	public function __construct(OAuth $oauth = null, $options = array())
 	{
-		$this->oauth = $oauth;
 		$this->options = $options;
-		$this->client  = $client;
 
 		// Setup the default API url if not already set.
 		if (!isset($this->options['api.url']))
 		{
 			$this->options['api.url'] = 'https://graph.facebook.com/';
 		}
+
+		$this->oauth = $oauth ?: new OAuth($options);
 	}
 
 	/**
@@ -147,7 +138,7 @@ class Facebook
 		{
 			if (false == isset($this->$name))
 			{
-				$this->$name = new $class($this->options, $this->client, $this->oauth);
+				$this->$name = new $class($this->options, $this->oauth);
 			}
 
 			return $this->$name;
